@@ -7,7 +7,7 @@
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            max-width: 800px;
+            max-width: 900px;
             margin: 40px auto;
             padding: 20px;
             line-height: 1.6;
@@ -28,18 +28,51 @@
             margin-bottom: 16px;
             color: #222;
         }
-        h3 {
-            font-size: 16px;
-            margin-top: 24px;
-            margin-bottom: 12px;
-            color: #444;
-        }
         ul {
             padding-left: 24px;
         }
         li {
             margin-bottom: 12px;
         }
+        .rock-dates {
+            background: #f8f9fa;
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 16px;
+            font-size: 14px;
+            color: #666;
+        }
+        .rock-dates strong {
+            color: #333;
+        }
+
+        /* View Toggle */
+        .view-toggle {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+        }
+        .view-btn {
+            padding: 8px 16px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            background: #fff;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .view-btn:hover {
+            border-color: #007bff;
+            color: #007bff;
+        }
+        .view-btn.active {
+            background: #007bff;
+            color: white;
+            border-color: #007bff;
+        }
+
+        /* List View */
         .milestone {
             display: flex;
             align-items: center;
@@ -75,7 +108,6 @@
             box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.15);
             background: #fff;
         }
-        /* Style the date input */
         input[type="date"]::-webkit-calendar-picker-indicator {
             cursor: pointer;
             opacity: 0.6;
@@ -83,6 +115,90 @@
         input[type="date"]::-webkit-calendar-picker-indicator:hover {
             opacity: 1;
         }
+
+        /* Month Grid View */
+        .calendar-grid {
+            display: none;
+        }
+        .calendar-grid.active {
+            display: block;
+        }
+        .calendar-month {
+            margin-bottom: 24px;
+        }
+        .calendar-month-title {
+            font-weight: 600;
+            font-size: 16px;
+            margin-bottom: 12px;
+            color: #333;
+        }
+        .calendar-header {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 4px;
+            margin-bottom: 8px;
+        }
+        .calendar-header-day {
+            text-align: center;
+            font-size: 12px;
+            font-weight: 600;
+            color: #666;
+            padding: 8px 4px;
+        }
+        .calendar-days {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 4px;
+        }
+        .calendar-day {
+            min-height: 100px;
+            border: 1px solid #eee;
+            border-radius: 4px;
+            padding: 4px;
+            font-size: 12px;
+            position: relative;
+            transition: background 0.2s, border-color 0.2s;
+        }
+        .calendar-day.empty {
+            background: #fafafa;
+            border-color: transparent;
+        }
+        .calendar-day.has-milestone {
+            background: #e7f3ff;
+            border-color: #007bff;
+        }
+        .calendar-day.drag-over {
+            background: #d4edff;
+            border-color: #0056b3;
+            border-width: 2px;
+        }
+        .calendar-day-num {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 4px;
+        }
+        .calendar-milestone {
+            background: #007bff;
+            color: white;
+            padding: 4px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            margin-bottom: 4px;
+            cursor: grab;
+            word-wrap: break-word;
+            line-height: 1.3;
+        }
+        .calendar-milestone:hover {
+            background: #0056b3;
+        }
+        .calendar-milestone:active {
+            cursor: grabbing;
+        }
+        .calendar-milestone.dragging {
+            opacity: 0.5;
+        }
+
+        /* Actions */
         .actions {
             margin-top: 40px;
             padding-top: 20px;
@@ -105,7 +221,6 @@
         }
         .btn-primary:hover {
             background: #0056b3;
-            transform: translateY(-1px);
         }
         .btn-secondary {
             background: #6c757d;
@@ -113,19 +228,8 @@
         }
         .btn-secondary:hover {
             background: #545b62;
-            transform: translateY(-1px);
         }
-        .rock-dates {
-            background: #f8f9fa;
-            padding: 12px 16px;
-            border-radius: 6px;
-            margin-bottom: 24px;
-            font-size: 14px;
-            color: #666;
-        }
-        .rock-dates strong {
-            color: #333;
-        }
+
     </style>
 </head>
 <body>
@@ -147,7 +251,15 @@
     </ul>
 
     <h2>Milestones:</h2>
-    <div id="milestones-container"></div>
+
+    <div class="view-toggle">
+        <button class="view-btn active" onclick="switchView('list')">List</button>
+        <button class="view-btn" onclick="switchView('grid')">Month Grid</button>
+    </div>
+
+    <div id="list-view"></div>
+    <div id="calendar-grid" class="calendar-grid"></div>
+
 
     <div class="actions">
         <button class="btn btn-primary" onclick="downloadMarkdown()">Download Markdown</button>
@@ -171,6 +283,8 @@
             { text: "Sales kickoff meeting with forecast review", date: "2026-02-03" }
         ];
 
+        let currentView = 'list';
+
         function formatDate(dateStr) {
             if (!dateStr) return '';
             const date = new Date(dateStr + 'T00:00:00');
@@ -181,8 +295,30 @@
             milestones.sort((a, b) => new Date(a.date) - new Date(b.date));
         }
 
-        function renderMilestones() {
-            const container = document.getElementById('milestones-container');
+        function switchView(view) {
+            currentView = view;
+            document.querySelectorAll('.view-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelector(`.view-btn[onclick="switchView('${view}')"]`).classList.add('active');
+            renderAll();
+        }
+
+        function renderAll() {
+            // Hide all views
+            document.getElementById('list-view').style.display = 'none';
+            document.getElementById('calendar-grid').classList.remove('active');
+
+            // Show selected view
+            if (currentView === 'list') {
+                document.getElementById('list-view').style.display = 'block';
+                renderListView();
+            } else {
+                document.getElementById('calendar-grid').classList.add('active');
+                renderCalendarGrid();
+            }
+        }
+
+        function renderListView() {
+            const container = document.getElementById('list-view');
             container.innerHTML = '';
 
             milestones.forEach((m, index) => {
@@ -196,17 +332,156 @@
                 container.appendChild(div);
             });
 
-            // Add change listeners
             container.querySelectorAll('.date-picker').forEach(input => {
                 input.addEventListener('change', handleDateChange);
             });
+        }
+
+        let draggedMilestoneIndex = null;
+
+        function renderCalendarGrid() {
+            const container = document.getElementById('calendar-grid');
+            container.innerHTML = '';
+
+            // Get date range - show 6 months starting from first milestone month
+            const dates = milestones.map(m => new Date(m.date + 'T00:00:00'));
+            const minDate = new Date(Math.min(...dates));
+
+            // Generate 6 months
+            const months = [];
+            let current = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
+            for (let i = 0; i < 6; i++) {
+                months.push(new Date(current));
+                current.setMonth(current.getMonth() + 1);
+            }
+
+            const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+            months.forEach(monthDate => {
+                const monthDiv = document.createElement('div');
+                monthDiv.className = 'calendar-month';
+
+                const monthName = monthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+                monthDiv.innerHTML = `<div class="calendar-month-title">${monthName}</div>`;
+
+                // Header
+                const header = document.createElement('div');
+                header.className = 'calendar-header';
+                dayNames.forEach(day => {
+                    header.innerHTML += `<div class="calendar-header-day">${day}</div>`;
+                });
+                monthDiv.appendChild(header);
+
+                // Days grid
+                const daysGrid = document.createElement('div');
+                daysGrid.className = 'calendar-days';
+
+                const firstDay = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+                const lastDay = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0);
+
+                // Empty cells before first day
+                for (let i = 0; i < firstDay.getDay(); i++) {
+                    const emptyDiv = document.createElement('div');
+                    emptyDiv.className = 'calendar-day empty';
+                    daysGrid.appendChild(emptyDiv);
+                }
+
+                // Days of month
+                for (let day = 1; day <= lastDay.getDate(); day++) {
+                    const dateStr = `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                    const dayMilestones = milestones.filter(m => m.date === dateStr);
+                    const hasMilestone = dayMilestones.length > 0;
+
+                    const dayDiv = document.createElement('div');
+                    dayDiv.className = `calendar-day${hasMilestone ? ' has-milestone' : ''}`;
+                    dayDiv.dataset.date = dateStr;
+                    dayDiv.innerHTML = `<div class="calendar-day-num">${day}</div>`;
+
+                    // Drop zone events
+                    dayDiv.addEventListener('dragover', handleDragOver);
+                    dayDiv.addEventListener('dragleave', handleDragLeave);
+                    dayDiv.addEventListener('drop', handleDrop);
+
+                    dayMilestones.forEach((m, idx) => {
+                        const mIndex = milestones.indexOf(m);
+                        const badge = document.createElement('div');
+                        badge.className = 'calendar-milestone';
+                        badge.textContent = `${mIndex + 1}. ${m.text}`;
+                        badge.draggable = true;
+                        badge.dataset.index = mIndex;
+
+                        // Drag events
+                        badge.addEventListener('dragstart', handleDragStart);
+                        badge.addEventListener('dragend', handleDragEnd);
+
+                        dayDiv.appendChild(badge);
+                    });
+
+                    daysGrid.appendChild(dayDiv);
+                }
+
+                monthDiv.appendChild(daysGrid);
+                container.appendChild(monthDiv);
+            });
+        }
+
+        function handleDragStart(e) {
+            draggedMilestoneIndex = parseInt(e.target.dataset.index);
+            e.target.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+        }
+
+        function handleDragEnd(e) {
+            e.target.classList.remove('dragging');
+            document.querySelectorAll('.calendar-day.drag-over').forEach(el => {
+                el.classList.remove('drag-over');
+            });
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            const dayEl = e.target.closest('.calendar-day');
+            if (dayEl && !dayEl.classList.contains('empty')) {
+                dayEl.classList.add('drag-over');
+            }
+        }
+
+        function handleDragLeave(e) {
+            const dayEl = e.target.closest('.calendar-day');
+            if (dayEl) {
+                dayEl.classList.remove('drag-over');
+            }
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            const dayEl = e.target.closest('.calendar-day');
+            if (dayEl && !dayEl.classList.contains('empty') && draggedMilestoneIndex !== null) {
+                const newDate = dayEl.dataset.date;
+                if (newDate) {
+                    milestones[draggedMilestoneIndex].date = newDate;
+                    sortMilestones();
+                    renderAll();
+                }
+            }
+            draggedMilestoneIndex = null;
+        }
+
+        function editMilestoneDate(index) {
+            const newDate = prompt(`Edit date for milestone ${index + 1}:\n"${milestones[index].text}"\n\nCurrent: ${formatDate(milestones[index].date)}\n\nEnter new date (YYYY-MM-DD):`, milestones[index].date);
+            if (newDate && /^\d{4}-\d{2}-\d{2}$/.test(newDate)) {
+                milestones[index].date = newDate;
+                sortMilestones();
+                renderAll();
+            }
         }
 
         function handleDateChange(e) {
             const index = parseInt(e.target.dataset.index);
             milestones[index].date = e.target.value;
             sortMilestones();
-            renderMilestones();
+            renderAll();
         }
 
         function generateMarkdown() {
@@ -260,7 +535,7 @@
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
             sortMilestones();
-            renderMilestones();
+            renderAll();
         });
     </script>
 </body>
