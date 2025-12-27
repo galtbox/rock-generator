@@ -151,12 +151,13 @@
             gap: 4px;
         }
         .calendar-day {
-            min-height: 70px;
+            min-height: 100px;
             border: 1px solid #eee;
             border-radius: 4px;
             padding: 4px;
             font-size: 12px;
             position: relative;
+            transition: background 0.2s, border-color 0.2s;
         }
         .calendar-day.empty {
             background: #fafafa;
@@ -166,6 +167,11 @@
             background: #e7f3ff;
             border-color: #007bff;
         }
+        .calendar-day.drag-over {
+            background: #d4edff;
+            border-color: #0056b3;
+            border-width: 2px;
+        }
         .calendar-day-num {
             font-weight: 600;
             color: #333;
@@ -174,17 +180,22 @@
         .calendar-milestone {
             background: #007bff;
             color: white;
-            padding: 2px 4px;
+            padding: 4px 6px;
             border-radius: 3px;
             font-size: 10px;
-            margin-bottom: 2px;
-            cursor: pointer;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            margin-bottom: 4px;
+            cursor: grab;
+            word-wrap: break-word;
+            line-height: 1.3;
         }
         .calendar-milestone:hover {
             background: #0056b3;
+        }
+        .calendar-milestone:active {
+            cursor: grabbing;
+        }
+        .calendar-milestone.dragging {
+            opacity: 0.5;
         }
 
         /* Actions */
@@ -326,19 +337,20 @@
             });
         }
 
+        let draggedMilestoneIndex = null;
+
         function renderCalendarGrid() {
             const container = document.getElementById('calendar-grid');
             container.innerHTML = '';
 
-            // Get date range
+            // Get date range - show 6 months starting from first milestone month
             const dates = milestones.map(m => new Date(m.date + 'T00:00:00'));
             const minDate = new Date(Math.min(...dates));
-            const maxDate = new Date(Math.max(...dates));
 
-            // Get months to display
+            // Generate 6 months
             const months = [];
             let current = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
-            while (current <= maxDate) {
+            for (let i = 0; i < 6; i++) {
                 months.push(new Date(current));
                 current.setMonth(current.getMonth() + 1);
             }
@@ -369,7 +381,9 @@
 
                 // Empty cells before first day
                 for (let i = 0; i < firstDay.getDay(); i++) {
-                    daysGrid.innerHTML += '<div class="calendar-day empty"></div>';
+                    const emptyDiv = document.createElement('div');
+                    emptyDiv.className = 'calendar-day empty';
+                    daysGrid.appendChild(emptyDiv);
                 }
 
                 // Days of month
@@ -380,15 +394,26 @@
 
                     const dayDiv = document.createElement('div');
                     dayDiv.className = `calendar-day${hasMilestone ? ' has-milestone' : ''}`;
+                    dayDiv.dataset.date = dateStr;
                     dayDiv.innerHTML = `<div class="calendar-day-num">${day}</div>`;
+
+                    // Drop zone events
+                    dayDiv.addEventListener('dragover', handleDragOver);
+                    dayDiv.addEventListener('dragleave', handleDragLeave);
+                    dayDiv.addEventListener('drop', handleDrop);
 
                     dayMilestones.forEach((m, idx) => {
                         const mIndex = milestones.indexOf(m);
                         const badge = document.createElement('div');
                         badge.className = 'calendar-milestone';
-                        badge.textContent = `${mIndex + 1}. ${m.text.substring(0, 20)}...`;
-                        badge.title = m.text;
-                        badge.onclick = () => editMilestoneDate(mIndex);
+                        badge.textContent = `${mIndex + 1}. ${m.text}`;
+                        badge.draggable = true;
+                        badge.dataset.index = mIndex;
+
+                        // Drag events
+                        badge.addEventListener('dragstart', handleDragStart);
+                        badge.addEventListener('dragend', handleDragEnd);
+
                         dayDiv.appendChild(badge);
                     });
 
@@ -398,6 +423,49 @@
                 monthDiv.appendChild(daysGrid);
                 container.appendChild(monthDiv);
             });
+        }
+
+        function handleDragStart(e) {
+            draggedMilestoneIndex = parseInt(e.target.dataset.index);
+            e.target.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+        }
+
+        function handleDragEnd(e) {
+            e.target.classList.remove('dragging');
+            document.querySelectorAll('.calendar-day.drag-over').forEach(el => {
+                el.classList.remove('drag-over');
+            });
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            const dayEl = e.target.closest('.calendar-day');
+            if (dayEl && !dayEl.classList.contains('empty')) {
+                dayEl.classList.add('drag-over');
+            }
+        }
+
+        function handleDragLeave(e) {
+            const dayEl = e.target.closest('.calendar-day');
+            if (dayEl) {
+                dayEl.classList.remove('drag-over');
+            }
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            const dayEl = e.target.closest('.calendar-day');
+            if (dayEl && !dayEl.classList.contains('empty') && draggedMilestoneIndex !== null) {
+                const newDate = dayEl.dataset.date;
+                if (newDate) {
+                    milestones[draggedMilestoneIndex].date = newDate;
+                    sortMilestones();
+                    renderAll();
+                }
+            }
+            draggedMilestoneIndex = null;
         }
 
         function editMilestoneDate(index) {
